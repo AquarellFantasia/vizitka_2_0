@@ -8,9 +8,9 @@ COPY pyproject.toml uv.lock ./
 # Install dependencies (no dev deps for production)
 RUN uv sync --no-dev --no-install-project
 
-# Copy application code
+# Copy application code and files needed for build
 COPY app ./app
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 
 # Install the project
 RUN uv sync --no-dev
