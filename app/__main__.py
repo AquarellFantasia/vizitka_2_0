@@ -1,4 +1,4 @@
-"""Allow running as python -m app."""
+"""Allow running the CLI as: python -m app."""
 
 from app.cli import main
 

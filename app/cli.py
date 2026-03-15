@@ -1,4 +1,4 @@
-"""CLI for vizitka."""
+"""CLI for vizitka: commands 'get' and 'favorites'."""
 
 import argparse
 import asyncio
@@ -9,7 +9,7 @@ from app.db import Database
 
 
 def cmd_get(args: argparse.Namespace) -> int:
-    """Run get command: check anime page, crosscheck DB, output new episodes."""
+    """Run get command: check animevost.org, crosscheck DB, print new episodes (or JSON)."""
     db = Database(data_dir=args.data_dir)
     new_episodes = asyncio.run(fetch_and_check(db))
 
@@ -25,7 +25,7 @@ def cmd_get(args: argparse.Namespace) -> int:
 
 
 def cmd_favorites(args: argparse.Namespace) -> int:
-    """List or manage favorites."""
+    """List favorites, or add one with --add."""
     db = Database(data_dir=args.data_dir)
     if args.add:
         db.add_favorite(args.add)
@@ -34,15 +34,18 @@ def cmd_favorites(args: argparse.Namespace) -> int:
         for t in db.favorites:
             print(t)
     else:
+        # Default: list all favorites
         for t in db.favorites:
             print(t)
     return 0
 
 
 def main() -> int:
+    """Parse command (get | favorites) and dispatch to the right handler."""
     parser = argparse.ArgumentParser(prog="vizitka", description="Anime update checker")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # vizitka get [--json] [--data-dir DIR]
     get_parser = subparsers.add_parser("get", help="Check for new episodes and update DB")
     get_parser.add_argument("--json", action="store_true", help="Output as JSON")
     get_parser.add_argument(
@@ -52,6 +55,7 @@ def main() -> int:
     )
     get_parser.set_defaults(func=cmd_get)
 
+    # vizitka favorites [--list] [--add NAME] [--data-dir DIR]
     fav_parser = subparsers.add_parser("favorites", help="List or add favorite anime")
     fav_parser.add_argument("--list", action="store_true", help="List favorites")
     fav_parser.add_argument("--add", type=str, help="Add a favorite by name substring")

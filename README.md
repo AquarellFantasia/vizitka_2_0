@@ -84,9 +84,38 @@ uv run pytest -v
 
 ## Endpoints
 
-| Path      | Method | Description                                                                 |
-|-----------|--------|-----------------------------------------------------------------------------|
-| `/`       | GET    | Root greeting                                                               |
-| `/health` | GET    | Health check                                                                |
-| `/anime`  | GET    | Raw anime names from animevost.org                                          |
-| `/get`    | GET    | Check favorites on page, crosscheck DB, return new episodes (and update DB) |
+| Path         | Method | Description                                                                 |
+|--------------|--------|-----------------------------------------------------------------------------|
+| `/`          | GET    | Root greeting                                                               |
+| `/health`    | GET    | Health check                                                                |
+| `/anime`     | GET    | Raw anime names from animevost.org                                          |
+| `/get`       | GET    | Check favorites on page, crosscheck DB, return new episodes (and update DB) |
+| `/favorites` | GET    | List favorite name substrings                                                |
+| `/favorites` | POST   | Add favorite (body: `{"name": "..."}`)                                      |
+| `/favorites` | DELETE | Remove favorite (body: `{"name": "..."}`)                                   |
+
+## Telegram bot
+
+The bot calls the API to list/add/delete favorites and check new episodes.
+
+**Local run** (API must be running, e.g. on port 8000):
+
+```bash
+export TELEGRAM_BOT_TOKEN=your_bot_token
+export VIZITKA_API_URL=http://localhost:8000   # optional, default
+uv run python -m app.telegram_bot
+```
+
+**Commands:** `/start`, `/favorites`, `/add <name>`, `/delete <name>`, `/get`
+
+## Docker Compose (API + bot)
+
+Run both the API and the Telegram bot in two containers; the bot talks to the API. Data is stored in a named volume.
+
+```bash
+export TELEGRAM_BOT_TOKEN=your_bot_token
+docker compose up -d
+```
+
+- API: http://localhost:8000  
+- Bot: connects to Telegram and uses `http://api:8000` internally.

@@ -1,0 +1,26 @@
+# API and Telegram bot. API owns data; bot calls the API.
+# Usage: docker compose up -d
+# Set TELEGRAM_BOT_TOKEN (e.g. in .env or export).
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - vizitka_data:/app/data
+    environment:
+      - ANIME_DB_PATH=/app/data
+    command: ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  bot:
+    build: .
+    depends_on:
+      - api
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - VIZITKA_API_URL=http://api:8000
+    command: ["uv", "run", "python", "-m", "app.telegram_bot"]
+
+volumes:
+  vizitka_data:
