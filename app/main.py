@@ -1,5 +1,7 @@
 """Simple FastAPI backend."""
 
+import asyncio
+import os
 import re
 
 import httpx
@@ -9,16 +11,56 @@ from pydantic import BaseModel
 
 from app.anime import fetch_and_check
 from app.db import Database
+from app.queue import enqueue_episodes
 
 # --- App and config ---
 app = FastAPI(title="Vizitka Backend")
 ANIMEVOST_URL = "https://animevost.org/"
+
+# Scheduler (runs in the API container, but disabled by default).
+# Enable with SCHEDULER_ENABLED=1 in Docker Compose.
+SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "0").lower() in ("1", "true", "yes", "on")
+SCHEDULER_INTERVAL_SECONDS = int(os.getenv("SCHEDULER_INTERVAL_SECONDS", "300"))
 
 
 class FavoriteName(BaseModel):
     """Body for add/delete favorite: single 'name' (substring to match anime titles)."""
 
     name: str
+
+
+async def _scheduler_loop() -> None:
+    """Periodic producer loop: scrape, enqueue any new episodes to Redis."""
+    while True:
+        try:
+            db = Database()
+            new_episodes = await fetch_and_check(db)
+            if new_episodes:
+                await enqueue_episodes(new_episodes)
+        except Exception:
+            # Keep the scheduler alive even if scraping fails.
+            # (For real apps, use logging instead of print.)
+            pass
+
+        await asyncio.sleep(SCHEDULER_INTERVAL_SECONDS)
+
+
+@app.on_event("startup")
+async def _start_scheduler() -> None:
+    """Start the periodic background task if enabled."""
+    if not SCHEDULER_ENABLED:
+        return
+    if getattr(app.state, "scheduler_task", None) is not None:
+        return
+    app.state.scheduler_task = asyncio.create_task(_scheduler_loop())
+
+
+@app.on_event("shutdown")
+async def _stop_scheduler() -> None:
+    """Stop scheduler on shutdown."""
+    task = getattr(app.state, "scheduler_task", None)
+    if task is not None:
+        task.cancel()
 
 
 @app.get("/")

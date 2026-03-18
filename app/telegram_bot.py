@@ -10,6 +10,8 @@ import httpx
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
+from app.chat_store import add_chat_id
+
 # Base URL of the Vizitka API (e.g. http://api:8000 in Docker Compose)
 API_BASE = os.getenv("VIZITKA_API_URL", "http://localhost:8000").rstrip("/")
 
@@ -46,6 +48,9 @@ async def _api_delete(path: str, json: dict) -> tuple[int, dict]:
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Welcome and list commands."""
+    # Remember this chat id so the notifier worker can send updates automatically.
+    if update.effective_chat and update.effective_chat.id:
+        add_chat_id(int(update.effective_chat.id))
     await update.message.reply_text(
         "Привет! Я бот Vizitka.\n\n"
         "/favorites — список избранного\n"

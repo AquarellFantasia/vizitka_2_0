@@ -3,6 +3,10 @@
 # Set TELEGRAM_BOT_TOKEN (e.g. in .env or export).
 
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
   api:
     build: .
     ports:
@@ -11,16 +15,39 @@ services:
       - vizitka_data:/app/data
     environment:
       - ANIME_DB_PATH=/app/data
+      - SCHEDULER_ENABLED=1
+      - SCHEDULER_INTERVAL_SECONDS=300
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
     command: ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
   bot:
     build: .
     depends_on:
       - api
+    volumes:
+      - vizitka_data:/app/data
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - VIZITKA_API_URL=http://api:8000
+      - ANIME_DB_PATH=/app/data
     command: ["uv", "run", "python", "-m", "app.telegram_bot"]
+
+  bot-worker:
+    build: .
+    depends_on:
+      - api
+      - redis
+    volumes:
+      - vizitka_data:/app/data
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ANIME_DB_PATH=/app/data
+      - REDIS_URL=redis://redis:6379/0
+      # Optional: if set, the worker notifies only this chat id.
+      # - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+    command: ["uv", "run", "python", "-m", "app.bot_worker"]
 
 volumes:
   vizitka_data:
