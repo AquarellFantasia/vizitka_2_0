@@ -11,7 +11,8 @@ from pydantic import BaseModel
 
 from app.anime import fetch_and_check
 from app.db import Database
-from app.queue import enqueue_episodes
+from app.kingdom_manga import check_and_download
+from app.queue import enqueue_episodes, enqueue_manga_chapter
 
 # --- App and config ---
 app = FastAPI(title="Vizitka Backend")
@@ -21,6 +22,8 @@ ANIMEVOST_URL = "https://animevost.org/"
 # Enable with SCHEDULER_ENABLED=1 in Docker Compose.
 SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "0").lower() in ("1", "true", "yes", "on")
 SCHEDULER_INTERVAL_SECONDS = int(os.getenv("SCHEDULER_INTERVAL_SECONDS", "300"))
+KINGDOM_CHECK_ENABLED = os.getenv("KINGDOM_CHECK_ENABLED", "0").lower() in ("1", "true", "yes", "on")
+KINGDOM_CHECK_INTERVAL_SECONDS = int(os.getenv("KINGDOM_CHECK_INTERVAL_SECONDS", "3600"))
 
 
 class FavoriteName(BaseModel):
@@ -38,29 +41,44 @@ async def _scheduler_loop() -> None:
             if new_episodes:
                 await enqueue_episodes(new_episodes)
         except Exception:
-            # Keep the scheduler alive even if scraping fails.
-            # (For real apps, use logging instead of print.)
             pass
-
         await asyncio.sleep(SCHEDULER_INTERVAL_SECONDS)
+
+
+async def _kingdom_check_loop() -> None:
+    """Periodic Kingdom manga check: new chapter -> download images, enqueue notification."""
+    while True:
+        try:
+            result = await check_and_download()
+            if result:
+                await enqueue_manga_chapter({
+                    "type": "manga_chapter",
+                    "chapter": result["chapter"],
+                    "url": result["url"],
+                    "image_count": result["image_count"],
+                    "saved_dir": result["saved_dir"],
+                })
+        except Exception:
+            pass
+        await asyncio.sleep(KINGDOM_CHECK_INTERVAL_SECONDS)
 
 
 @app.on_event("startup")
 async def _start_scheduler() -> None:
-    """Start the periodic background task if enabled."""
-    if not SCHEDULER_ENABLED:
-        return
-    if getattr(app.state, "scheduler_task", None) is not None:
-        return
-    app.state.scheduler_task = asyncio.create_task(_scheduler_loop())
+    """Start periodic background tasks if enabled."""
+    if SCHEDULER_ENABLED and getattr(app.state, "scheduler_task", None) is None:
+        app.state.scheduler_task = asyncio.create_task(_scheduler_loop())
+    if KINGDOM_CHECK_ENABLED and getattr(app.state, "kingdom_task", None) is None:
+        app.state.kingdom_task = asyncio.create_task(_kingdom_check_loop())
 
 
 @app.on_event("shutdown")
 async def _stop_scheduler() -> None:
-    """Stop scheduler on shutdown."""
-    task = getattr(app.state, "scheduler_task", None)
-    if task is not None:
-        task.cancel()
+    """Stop schedulers on shutdown."""
+    for name in ("scheduler_task", "kingdom_task"):
+        task = getattr(app.state, name, None)
+        if task is not None:
+            task.cancel()
 
 
 @app.get("/")
@@ -156,3 +174,20 @@ async def get_anime_names():
                     break
 
     return {"anime": names}
+
+
+# --- Kingdom manga ---
+
+@app.get("/kingdom/check")
+async def kingdom_check():
+    """
+    Check readkingdom.com for new Kingdom chapter. If found, download images to
+    data/downloads/kingdom/chapter-{num}/ and return result.
+    """
+    try:
+        result = await check_and_download()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Kingdom check failed: {e!s}") from e
+    if result is None:
+        return {"new_chapter": False, "message": "No new chapter"}
+    return {"new_chapter": True, **result}

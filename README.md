@@ -93,6 +93,7 @@ uv run pytest -v
 | `/favorites` | GET    | List favorite name substrings                                                |
 | `/favorites` | POST   | Add favorite (body: `{"name": "..."}`)                                      |
 | `/favorites` | DELETE | Remove favorite (body: `{"name": "..."}`)                                   |
+| `/kingdom/check` | GET | Check for new Kingdom chapter, download images if found                      |
 
 ## Telegram bot
 
@@ -119,3 +120,13 @@ docker compose up -d
 
 - API: http://localhost:8000  
 - Bot: connects to Telegram and uses `http://api:8000` internally.
+
+## Kingdom manga checker
+
+Monitors [readkingdom.com](https://ww5.readkingdom.com/manga/kingdom/) for new chapters. When a new chapter appears:
+- Downloads all page images to `data/downloads/kingdom/chapter-{num}/`
+- Sends a Telegram notification (via the same bot worker)
+
+**Manual check:** `GET http://localhost:8000/kingdom/check`
+
+**Background:** Enable with `KINGDOM_CHECK_ENABLED=1` and `KINGDOM_CHECK_INTERVAL_SECONDS=3600` (default: every hour). Set in Docker Compose.

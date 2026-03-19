@@ -35,6 +35,15 @@ async def enqueue_episodes(episodes: list[dict[str, Any]]) -> None:
 
     redis_client = await _get_redis()
     payloads = [json.dumps(ep, ensure_ascii=False) for ep in episodes]
-    # Use RPUSH so consumer using BLPOP on the same list receives in FIFO-ish order.
     await redis_client.rpush(QUEUE_KEY, *payloads)
+
+
+# Queue for manga chapter notifications (same consumer can handle both).
+MANGA_QUEUE_KEY = os.getenv("VIZITKA_MANGA_QUEUE_KEY", "vizitka:manga_chapters")
+
+
+async def enqueue_manga_chapter(payload: dict[str, Any]) -> None:
+    """Push a new manga chapter notification to Redis."""
+    redis_client = await _get_redis()
+    await redis_client.rpush(MANGA_QUEUE_KEY, json.dumps(payload, ensure_ascii=False))
 

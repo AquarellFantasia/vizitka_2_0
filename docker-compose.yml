@@ -17,6 +17,8 @@ services:
       - ANIME_DB_PATH=/app/data
       - SCHEDULER_ENABLED=1
       - SCHEDULER_INTERVAL_SECONDS=300
+      - KINGDOM_CHECK_ENABLED=1
+      - KINGDOM_CHECK_INTERVAL_SECONDS=3600
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       - redis

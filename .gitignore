@@ -39,3 +39,6 @@ Thumbs.db
 
 # uv
 .uv/
+
+# Downloaded manga images
+data/downloads/

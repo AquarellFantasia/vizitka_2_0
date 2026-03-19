@@ -16,10 +16,11 @@ from telegram import Bot
 from app.chat_store import load_chat_ids
 
 QUEUE_KEY = os.getenv("VIZITKA_QUEUE_KEY", "vizitka:new_episodes")
+MANGA_QUEUE_KEY = os.getenv("VIZITKA_MANGA_QUEUE_KEY", "vizitka:manga_chapters")
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 
 
-def _format_message(payload: dict) -> str:
+def _format_anime_message(payload: dict) -> str:
     full_name = payload.get("full_name") or payload.get("name") or "Anime"
     episode = payload.get("episode")
     url = payload.get("url")
@@ -29,6 +30,24 @@ def _format_message(payload: dict) -> str:
     if url:
         lines.append(url)
     return "\n".join(lines)
+
+
+def _format_manga_message(payload: dict) -> str:
+    chapter = payload.get("chapter", "?")
+    url = payload.get("url", "")
+    count = payload.get("image_count", 0)
+    lines = [f"Kingdom — новая глава {chapter}"]
+    if count:
+        lines.append(f"Страниц: {count}")
+    if url:
+        lines.append(url)
+    return "\n".join(lines)
+
+
+def _format_message(payload: dict) -> str:
+    if payload.get("type") == "manga_chapter":
+        return _format_manga_message(payload)
+    return _format_anime_message(payload)
 
 
 async def main() -> int:
@@ -60,8 +79,8 @@ async def main() -> int:
     redis_client = from_url(REDIS_URL, decode_responses=True)
 
     while True:
-        # Wait for next message; Redis returns a (list, value) tuple.
-        item = await redis_client.blpop(QUEUE_KEY, timeout=5)
+        # Wait for next message from either anime or manga queue.
+        item = await redis_client.blpop([QUEUE_KEY, MANGA_QUEUE_KEY], timeout=5)
         if not item:
             continue
 
